@@ -1,0 +1,25 @@
+{
+    "NAME" : "FLAUANCE-AI60",
+    "CODES" : [
+        {
+            "POWER" : "0x3f5c18",
+            "MUTE" : "0x3f5c15",
+            "SOURCE" : "0x3f5c10",
+            "TREBLE_UP" : "0x3f5c05",
+            "TREBLE_DOWN" : "0x3f5c0b",
+            "BASS_UP" : "0x3f5c0f",
+            "BASS_DOWN" : "0x3f5c06",
+            "VOLUME_UP" : "0x3f5c55",
+            "VOLUME_DOWN" : "0x3f5c59",
+            "LED_BRIGHTNESS" : "0x3f5c1f"
+        }
+    ],
+    "ATTRIBUTES" : [
+        {
+            "POWER": 0,
+            "VOLUME": 0,
+            "MUTE": 0,
+            "SOURCE": 0
+        }
+    ]
+}
