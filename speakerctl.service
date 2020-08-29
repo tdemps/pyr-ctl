@@ -1,12 +1,15 @@
 [Unit]
 Description=Speaker control daemon via IR
-After=multi-user.target
+After=network.target
 Conflicts=getty@tty1.service
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python3 /home/pi/ir-ctrl-proj/main.py
+Restart=always
+RestartSec=1
+ExecStart=/usr/bin/python3 /home/pi/ir-ctrl-proj/src/main.py
 StandardInput=tty-force
+User=pi
 
 [Install]
 WantedBy=multi-user.target

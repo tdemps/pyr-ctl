@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+
 import json
 import subprocess as subP
 import time as t
@@ -27,14 +28,14 @@ def irReadRemoteFile(filePath):
     else:
         name = jsonData["NAME"]
     
-    print(irReadRemoteFile.__name__,"Loading remote for",name)
+    print(irReadRemoteFile.__name__,": Loading remote for",name,":")
 
     if( "CODES" not in jsonData or len(jsonData["CODES"][0]) == 0 ):
         print(irReadRemoteFile.__name__,":","json file has no CODES attribute")
         return None
 
     for n,val in jsonData["CODES"][0].items():
-        print(n,":",val)
+        print(n,val,sep=".....")
 
     irRegisteredRemotes[name] = jsonData["CODES"][0]
     return jsonData["CODES"][0]
