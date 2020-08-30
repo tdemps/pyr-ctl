@@ -1,11 +1,18 @@
-Python library utilizing newer IR tools built into the Linux kernel (no LIRC package needed!).
+Python library utilizing newer IR tools (no LIRC package needed!).
 
-Uses python 3 (written on 3.8)
+Uses Python 3 (tested on 3.8)
 
 1. Install ir-keytable, v4l-utils (for ir-ctl) and raspotify
-2. Run "sudo chmod +x test-hook.sh"
-3. Add "--onevent *path-to-this-repo*/test-hook.sh" to the OPTIONS= line in /etc/default/raspotify
-4. Run "crontab -e" and add "@reboot python3 *path-to-this-repo*/src/main.py
+2. Edit /boot/config.txt to add dtoverlay lines for gpio-ir and gpio-ir-tx (example below):
+    dtoverlay=gpio-ir,gpio_pin=24
+    dtoverlay=gpio-ir-tx,gpio_pin=25
+
+3. reboot and check that /dev contains lirc0 (transmitter) and lirc1 (receiver).
+   Not sure how these are ordered yet.
+4. Run "sudo chmod +x test-hook.sh"
+5. Add "--onevent *path-to-this-repo*/test-hook.sh" to the OPTIONS= line in /etc/default/raspotify
+6. restart raspotify ("service raspotify restart")
+7. Run "crontab -e" and add "@reboot python3 *path-to-this-repo*/src/main.py
 
 TODO:
 -Use actual logging module instead of cluttered prints
@@ -13,4 +20,4 @@ TODO:
 -Add ir_rx as part of ir_lib
 -Grab protocol from remote file, use as part of transmit cmd 
 -Create remote class to store codes,protocol,name,etc
--Automated install script?
+-Automated-ish install script?

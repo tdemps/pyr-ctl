@@ -32,24 +32,18 @@ class spotifyState:
         #current song of session
         self.__currentSong = currentSong
 
-        if( onDisconnect is None ):
-            self.disconnectHandler = self.disconnect
-        else:
-            self.disconnectHandler = onDisconnect
-
-        if( onConnect is None ):
-            self.connectHandler = self.connect
-        else:
-            self.connectHandler = onConnect
+        self.disconnectHandler = onDisconnect if callable(onDisconnect) else spotifyState.disconnect
+        self.connectHandler = onConnect if callable(onConnect) else spotifyState.connect
         
         return
 
-
-    def disconnect(self):
+    @staticmethod
+    def disconnect():
         print("disconnect handler not given, this does nothing")
         return
 
-    def connect(self):
+    @staticmethod
+    def connect():
         print("connect handler not given, this does nothing")
 
     def isPlaying(self):
