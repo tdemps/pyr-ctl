@@ -4,16 +4,13 @@ from systemd import journal
 import datetime as dt
 import logging
 import re
-# import uuid
-import select
 import ir_lib as irl
 import signal
 from json import loads
 from ir_lib_rx import irRxMonitorThread
-from enum import Enum,auto
 from spotify_lib import *
 
-fluancePath = "/home/pi/ir-ctrl-proj/FLUANCE-AI60-REMOTE.json"
+fluancePath = "/home/pi/ir-ctrl-proj/FLUANCE-AI60-REMOTE.toml"
 # name of Soptify service to watch for log entries
 spServiceName = "raspotify.service"
 # used to convert timestamps from log entries to datetime obj's
@@ -23,10 +20,6 @@ spServiceJournal = None
 loggerName = "ir-ctrl-proj"
 # used to send programs output to journal log
 spLogger = None
-# lastActiveTime = dt.datetime.now()
-# True if user is using spotify client
-spIsActive = False
-
 
 spState = None
 
@@ -37,11 +30,10 @@ speaker = {
     "SOURCE" : 0
 }
 
-
 irRxSysDevice = "rc1"
 
 def loggerSetup():
-    if(spLogger is not None):
+    if( spLogger is not None ):
         print("loggerSetup: spLoggerObj is non-null")
         return
     else:
@@ -55,29 +47,34 @@ def loggerSetup():
 
 def parseSpMessage(msg):
     global spState
+
+    if( not msg ):
+        return -1
+
     msgTime = re.search(r"\[(.+?)\s{1}", msg)
 
-    if(msgTime is None):
+    if( msgTime is None ):
         print(parseSpMessage.__name__,"Error processing journal entry!!")
         return -1
     else:
         msgTime = msgTime.group(1)
         msgTime = dt.datetime.strptime(msgTime,datetimeFormatStr)
 
+    #checks if log entry is song info
     song = re.search(r"<(.+?)>.+loaded", msg)
 
-    if(song is not None):
+    if( song is not None ):
         #new song queued
         song = song.group(1)
-        # lastActiveTime = dt.datetime.strptime(msgTime,datetimeFormatStr)
         spState.currentSong = song
         spState.lastActiveTime = msgTime
         print("song",song,"played at",msgTime.strftime("%m/%d, %H:%M:%S"))
         return RASPOTIFY_MSG_TYPE.NEW_SONG
     
+    # event attributes are logged in json form (separate entries than songs)
     event = re.search(r"({.*})",msg)
     
-    if(event is not None):
+    if( event is not None ):
         try:
             event = loads(event.group(1))
             spState.handleEvent(event,msgTime)
@@ -94,6 +91,7 @@ def journalReaderSetup(serviceName=""):
     if( spServiceJournal is not None ):
         print(journalReaderSetup.__name__,": journal reader already setup!")
         return
+
     print(journalReaderSetup.__name__,": Setting up journal reader for:",serviceName)
     j = journal.Reader()
     #only entries from this boot
@@ -105,7 +103,7 @@ def journalReaderSetup(serviceName=""):
     j.seek_tail()
     entry = j.get_previous()
     #iterate through reversed journal to figure out current state of spotify
-    while(bool(entry)):
+    while( bool(entry) ):
         mType = parseSpMessage(entry["MESSAGE"])
         #if we find a song or player event entry, that's enough to determine state.
         if( mType == RASPOTIFY_MSG_TYPE.NEW_SONG or mType == RASPOTIFY_MSG_TYPE.PLAYER_EVENT):
@@ -142,16 +140,15 @@ def keyboardInterruptHandler(signal, frame):
 if __name__ == "__main__":
     # print("Main!")
     remote = irl.irReadRemoteFile(fluancePath)
-
+    if(remote is None):
+        print("err reading remote file")
+    
     spState = spotifyState(onDisconnect=spDisconnect,onConnect=spConnect)
     spLogger = loggerSetup()
     spServiceJournal = journalReaderSetup(spServiceName)
     signal.signal(signal.SIGINT, keyboardInterruptHandler)  
     
-    
-    if(remote is None):
-        print("err reading remote file")
-    
+
     # irl.irSendCmd(remote["POWER"])
     print("Setup complete.\n")
 

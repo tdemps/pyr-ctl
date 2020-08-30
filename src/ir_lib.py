@@ -1,8 +1,9 @@
 #!/usr/bin/python3
 
-import json
 import subprocess as subP
 import time as t
+from toml import load,TomlDecodeError
+from ir_lib_rx import irRxMonitorThread
 
 irRegisteredRemotes = {}
 irSendCmdFormatStr = "ir-ctl -d /dev/lirc0 --scancode=necx:{}"
@@ -12,33 +13,39 @@ irCtlCmdStatus = False
   ' @returns new remote object
 '''
 def irReadRemoteFile(filePath):
-    jsonData = None
     name = None
+    protocols = None
+    attributes = None
+    codes = None
 
     try:
         with open(filePath,"r") as f:
-            jsonData = json.load(f)
-    except json.JSONDecodeError as e:
-        print(irReadRemoteFile.__name__,"Error decoding remote json:",filePath,"\nerror:\n",e)
+            tomlData = load(f)
+        protocols = tomlData['protocols'][0]
+        attributes = tomlData['attributes'][0]
+        codes = {value:key for key, value in protocols["scancodes"].items()}
+        
+    except (TomlDecodeError,KeyError) as e:
+        if(type(e) == KeyError):
+            print(irReadRemoteFile.__name__,"Error: No key\"",e.args[0],"\" in given toml")
+        else:
+            print(irReadRemoteFile.__name__,"Error decoding remote toml:",filePath,"\nerror:\n",e.args)
+        print("Please see example .toml at https://manpages.debian.org/testing/ir-keytable/rc_keymap.5.en.html")
         return None
 
-    if( "NAME" not in jsonData):
+    if( "name" not in protocols):
         name = len(irRegisteredRemotes)
-        print(irReadRemoteFile.__name__,"[WARNING] Remote json had no NAME field, using",name)
+        print(irReadRemoteFile.__name__,"[WARNING] Remote toml had no name field, using",name)
     else:
-        name = jsonData["NAME"]
+        name = protocols["name"]
     
     print(irReadRemoteFile.__name__,": Loading remote for",name,":")
 
-    if( "CODES" not in jsonData or len(jsonData["CODES"][0]) == 0 ):
-        print(irReadRemoteFile.__name__,":","json file has no CODES attribute")
-        return None
+    for k,v in codes.items():
+        print(k,v,sep=".....")
 
-    for n,val in jsonData["CODES"][0].items():
-        print(n,val,sep=".....")
-
-    irRegisteredRemotes[name] = jsonData["CODES"][0]
-    return jsonData["CODES"][0]
+    irRegisteredRemotes[name] = codes
+    return codes
 
 
 def irTxCmdCheck():

@@ -1,0 +1,22 @@
+[[protocols]]
+name = "FLAUANCE-AI60"
+protocol = "necx"
+varient = "necx"
+
+[protocols.scancodes]
+0x3f5c18 = "POWER"
+0x3f5c15 = "MUTE"
+0x3f5c10 = "SOURCE"
+0x3f5c05 = "TREBLE_UP"
+0x3f5c0b = "TREBLE_DOWN"
+0x3f5c0f = "BASS_UP"
+0x3f5c06 = "BASS_DOWN"
+0x3f5c55 = "VOLUME_UP"
+0x3f5c59 = "VOLUME_DOWN"
+0x3f5c1f = "LED_BRIGHTNESS"
+
+[[attributes]]
+POWER  = 0
+VOLUME = 0
+MUTE   = 0
+SOURCE = 0

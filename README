@@ -1,1 +1,9 @@
 Python library utilizing newer IR tools built into the Linux kernel (no LIRC package needed!).
+
+Uses python 3 (written on 3.8)
+
+
+1. Install ir-keytable and raspotify
+2. "sudo chmod +x test-hook.sh"
+3. Add "--onevent *path-to-this-repo*/test-hook.sh" to the OPTIONS= line in /etc/default/raspotify
+4. Run "crontab -e" and add "@reboot python3 *path-to-this-repo*/src/main.py

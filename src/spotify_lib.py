@@ -1,7 +1,6 @@
 from enum import Enum,auto
 import datetime as dt
 
-
 # Num minutes before running spotify shutdown routine
 spTimeout = 15
 
@@ -27,6 +26,7 @@ class spotifyState:
         # current state of session
         self.state = startState
         self.__isActive = False
+        self.timeout = spTimeout
         # last time spotify session was active
         self.__lastActiveTime = dt.datetime.now()
         #current song of session
@@ -37,7 +37,7 @@ class spotifyState:
         else:
             self.disconnectHandler = onDisconnect
 
-        if( onConnect is None):
+        if( onConnect is None ):
             self.connectHandler = self.connect
         else:
             self.connectHandler = onConnect
@@ -59,16 +59,17 @@ class spotifyState:
 
         dT = dt.datetime.utcnow() - self.lastActiveTime
         dMin = dT.seconds / 60
+
         if( self.state == SPOTIFY_STATE.UNKNOWN ):
             return False
         #if we are currently playing music, we are active
         elif( self.state == SPOTIFY_STATE.PLAYING ):
             return True
         #if we are paused, use the timeout to determine active state
-        elif( dMin > spTimeout and self.state == SPOTIFY_STATE.PAUSED ):
+        elif( dMin > self.timeout and self.state == SPOTIFY_STATE.PAUSED ):
             return False
         #if we are stopped, definitely are inactive
-        elif(self.state == SPOTIFY_STATE.STOPPED ):
+        elif( self.state == SPOTIFY_STATE.STOPPED ):
             return False
 
         return True
@@ -96,7 +97,7 @@ class spotifyState:
 
     def handleEvent(self, eDict=None, time=None):
 
-        if( eDict is None or time is None ):
+        if( not eDict or not time ):
             return
 
         self.lastActiveTime = time
@@ -147,7 +148,7 @@ class spotifyState:
         dT = dt.datetime.utcnow() - val
         # q,r = divmod(deltaT.days * (24*60*60) + deltaT.seconds,60)
         dMin = dT.seconds / 60
-        if( dMin < spTimeout ):
+        if( dMin < self.timeout ):
             self.__isActive = True
 
         return
