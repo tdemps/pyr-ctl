@@ -22,14 +22,14 @@ def irReadRemoteFile(filePath):
         with open(filePath,"r") as f:
             tomlData = load(f)
         protocols = tomlData['protocols'][0]
-        attributes = tomlData['attributes'][0]
+        # attributes = tomlData['attributes'][0]
         codes = {value:key for key, value in protocols["scancodes"].items()}
-        
+
     except (TomlDecodeError,KeyError) as e:
         if(type(e) == KeyError):
             print(irReadRemoteFile.__name__,"Error: No key\"",e.args[0],"\" in given toml")
         else:
-            print(irReadRemoteFile.__name__,"Error decoding remote toml:",filePath,"\nerror:\n",e.args)
+            print(irReadRemoteFile.__name__,"Error decoding remote toml:",filePath,"\n\t",e.args)
         print("Please see example .toml at https://manpages.debian.org/testing/ir-keytable/rc_keymap.5.en.html")
         return None
 

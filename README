@@ -2,8 +2,15 @@ Python library utilizing newer IR tools built into the Linux kernel (no LIRC pac
 
 Uses python 3 (written on 3.8)
 
-
-1. Install ir-keytable and raspotify
-2. "sudo chmod +x test-hook.sh"
+1. Install ir-keytable, v4l-utils (for ir-ctl) and raspotify
+2. Run "sudo chmod +x test-hook.sh"
 3. Add "--onevent *path-to-this-repo*/test-hook.sh" to the OPTIONS= line in /etc/default/raspotify
 4. Run "crontab -e" and add "@reboot python3 *path-to-this-repo*/src/main.py
+
+TODO:
+-Use actual logging module instead of cluttered prints
+-Remote file passed in as argument
+-Add ir_rx as part of ir_lib
+-Grab protocol from remote file, use as part of transmit cmd 
+-Create remote class to store codes,protocol,name,etc
+-Automated install script?
