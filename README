@@ -1,4 +1,4 @@
-Python library utilizing newer IR tools (no LIRC package needed!).
+Python library utilizing newer IR tools (no LIRC package needed!). Also in here is a raspotify-monitoring system I've been working on to give off certain IR commands. 
 
 Uses Python 3 (tested on 3.8)
 
@@ -9,7 +9,7 @@ Uses Python 3 (tested on 3.8)
 
 3. reboot and check that /dev contains lirc0 (transmitter) and lirc1 (receiver).
    Not sure how these are ordered yet.
-4. Run "sudo chmod +x test-hook.sh"
+4. Run "sudo chmod +x test-hook.sh" in local copy of this repo
 5. Add "--onevent *path-to-this-repo*/test-hook.sh" to the OPTIONS= line in /etc/default/raspotify
 6. restart raspotify ("service raspotify restart")
 7. Run "crontab -e" and add "@reboot python3 *path-to-this-repo*/src/main.py
@@ -21,3 +21,5 @@ TODO:
 -Grab protocol from remote file, use as part of transmit cmd 
 -Create remote class to store codes,protocol,name,etc
 -Automated-ish install script?
+
+Feel free to send comments/issues/suggestions to me. 
