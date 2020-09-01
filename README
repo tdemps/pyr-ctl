@@ -2,6 +2,8 @@ Python library utilizing newer IR tools (no LIRC package needed!). Also in here 
 
 Uses Python 3 (tested on 3.8)
 
+PREFACE: This is written on/for a Raspberry Pi 4. I make no promises on its functionality on other platforms.
+
 1. Install ir-keytable, v4l-utils (for ir-ctl) and raspotify
 2. Edit /boot/config.txt to add dtoverlay lines for gpio-ir and gpio-ir-tx (example below):
     dtoverlay=gpio-ir,gpio_pin=24
