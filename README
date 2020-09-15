@@ -1,6 +1,8 @@
-Python library utilizing newer IR tools (no LIRC package needed!).
+Python library utilizing newer IR tools (no LIRC package needed!). Also in here is a raspotify-monitoring system I've been working on to give off certain IR commands. 
 
 Uses Python3 (tested on 3.8)
+
+PREFACE: This is written on/for a Raspberry Pi 4. I make no promises on its functionality on other platforms.
 
 1. Install ir-keytable, v4l-utils (for ir-ctl) and raspotify
 2. Edit /boot/config.txt to add dtoverlay lines for gpio-ir and gpio-ir-tx (example below):
@@ -10,7 +12,7 @@ Uses Python3 (tested on 3.8)
    
 3. reboot and check that /dev contains lirc0 (transmitter) and lirc1 (receiver).
    Not sure how these are ordered yet.
-4. Run "sudo chmod +x test-hook.sh"
+4. Run "sudo chmod +x test-hook.sh" in local copy of this repo
 5. Add "--onevent *path-to-this-repo*/test-hook.sh" to the OPTIONS= line in /etc/default/raspotify
 6. restart raspotify ("service raspotify restart")
 7. Copy speakerctl.service to /lib/systemd/system and run:
@@ -26,3 +28,5 @@ TODO:
 -Create remote class to store codes,protocol,name,etc
 -Automated-ish install script?
 -Ability to map two ir codes (RX one code and TX the mapped code)
+
+Feel free to send comments/issues/suggestions to me. 
