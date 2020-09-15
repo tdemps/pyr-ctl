@@ -1,11 +1,14 @@
 [Unit]
-Description=Speaker control daemon via IR
+Description=Speaker control service via IR,raspotify
 After=network.target
+After=raspotify.service
+StartLimitIntervel=250
+StartLimitBurst=20
 
 [Service]
 Type=simple
 Restart=always
-RestartSec=1
+RestartSec=10
 ExecStart=/usr/bin/python3 -u src/main.py
 WorkingDirectory=/home/pi/ir-ctrl-proj/
 User=pi

@@ -34,7 +34,7 @@ class spotifyState:
 
         self.disconnectHandler = onDisconnect if callable(onDisconnect) else spotifyState.disconnect
         self.connectHandler = onConnect if callable(onConnect) else spotifyState.connect
-        
+
         return
 
     @staticmethod
@@ -45,7 +45,8 @@ class spotifyState:
     @staticmethod
     def connect():
         print("connect handler not given, this does nothing")
-
+        return
+        
     def isPlaying(self):
         return self.state == SPOTIFY_STATE.PLAYING
 

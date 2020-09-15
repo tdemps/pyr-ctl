@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+from tempfile import TemporaryFile
 from systemd import journal
 import datetime as dt
 import logging
@@ -7,8 +8,9 @@ import re
 import ir_lib as irl
 import signal
 from json import loads
-from ir_lib_rx import irRxMonitorThread
+from ir_lib_rx import irRxMonitorThread,initIRRx
 from spotify_lib import *
+import queue as q
 
 fluancePath = "/home/pi/ir-ctrl-proj/FLUANCE-AI60-REMOTE.toml"
 # name of Soptify service to watch for log entries
@@ -30,7 +32,10 @@ speaker = {
     "SOURCE" : 0
 }
 
-irRxSysDevice = "rc1"
+# sys device used for RX. might be rc1 sometimes
+irRxSysDevice = "rc2"
+
+irTxDevice = "/dev/lirc-tx"
 
 def loggerSetup():
     if( spLogger is not None ):
@@ -60,7 +65,7 @@ def parseSpMessage(msg):
         msgTime = msgTime.group(1)
         msgTime = dt.datetime.strptime(msgTime,datetimeFormatStr)
 
-    #checks if log entry is song info
+    # checks if log entry is song info
     song = re.search(r"<(.+?)>.+loaded", msg)
 
     if( song is not None ):
@@ -76,6 +81,7 @@ def parseSpMessage(msg):
     
     if( event is not None ):
         try:
+            # if log msg is an event (JSON), process it into dictionary
             event = loads(event.group(1))
             spState.handleEvent(event,msgTime)
             return RASPOTIFY_MSG_TYPE.PLAYER_EVENT
@@ -119,7 +125,7 @@ def journalReaderSetup(serviceName=""):
 def spDisconnect():
 
     print("User has disconnected from Spotify")
-    #trigger ir led cmd to turn off speakers
+    # trigger ir led cmd to turn off speakers
     irl.irSendCmd(remote["POWER"])
 
     return
@@ -138,11 +144,12 @@ def keyboardInterruptHandler(signal, frame):
 
 
 if __name__ == "__main__":
-    # print("Main!")
+    # read in remote map file to generate remote object
     remote = irl.irReadRemoteFile(fluancePath)
     if(remote is None):
         print("err reading remote file")
     
+    # create new spotify state object with callbacks for connects/disconnects
     spState = spotifyState(onDisconnect=spDisconnect,onConnect=spConnect)
     spLogger = loggerSetup()
     spServiceJournal = journalReaderSetup(spServiceName)
@@ -152,27 +159,26 @@ if __name__ == "__main__":
     # irl.irSendCmd(remote["POWER"])
     print("Setup complete.\n")
 
-    rxThread = irRxMonitorThread(1,"test",irRxSysDevice)
+    # PLACEHOLDER
+    irl.getSysDeviceNames()
+    
+    rxProcess = initIRRx(irRxSysDevice)
+    rxThread = irRxMonitorThread(1,"test",rxProcess)
     rxThread.daemon = True
     rxThread.start()
 
-    
     while True:
-        #checks every 5 seconds
+        # checks every X seconds
         event = spServiceJournal.wait(1)
 
         for e in spServiceJournal:
             parseSpMessage(e["MESSAGE"])
 
-        # deltaT = dt.datetime.utcnow() - spState.lastActiveTime
-        # # q,r = divmod(deltaT.days * (24*60*60) + deltaT.seconds,60)
-        # deltaMin = deltaT.seconds / 60
-
-        # if(spIsActive and deltaMin > spTimeout):
-        # if( not spState.isActive() ):
-        #     spDisconnect()
-        # elif(deltaMin < spTimeout and not spIsActive):
-        #     print("User has active spotify sesssion")
-        #     spIsActive = True
-        #     irl.irSendCmd(remote["POWER"])
+        try:
+            # check for new items in rx queue
+            irRxProtocol,irRxCode = rxThread.rxQ.get(block = False)
+            print("Received new irCode from rxThread")
+            rxThread.rxQ.task_done()
+        except q.Empty:
+            pass
 

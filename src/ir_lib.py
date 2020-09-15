@@ -1,12 +1,18 @@
 #!/usr/bin/python3
 
 import subprocess as subP
+from sys import stdout
 import time as t
 from toml import load,TomlDecodeError
-from ir_lib_rx import irRxMonitorThread
+from re import search
+import pexpect
 
 irRegisteredRemotes = {}
-irSendCmdFormatStr = "ir-ctl -d /dev/lirc0 --scancode=necx:{}"
+
+IR_TX_DEFAULT_DEVICE = "/dev/lirc-tx"
+IR_TX_DEFAULT_PROTOCOL = "necx"
+
+irSendCmdFormatStr = "ir-ctl -d {device} --scancode={protocol}:{code}"
 irCtlCmdStatus = False
 
 ''' Reads remote codes from file
@@ -63,7 +69,7 @@ def irTxCmdCheck():
     irCtlCmdStatus = True
     return True
 
-def irSendCmd(cmd):
+def irSendCmd(cmd, dev=IR_TX_DEFAULT_DEVICE, protocol=IR_TX_DEFAULT_PROTOCOL):
 
     print(irSendCmd.__name__,"entered")
 
@@ -74,7 +80,7 @@ def irSendCmd(cmd):
         print(irSendCmd.__name__,":","invalid command")
         return -1
     
-    cmdToRun = irSendCmdFormatStr.format(cmd)
+    cmdToRun = irSendCmdFormatStr.format(device=dev,protocol=protocol,code=cmd)
     print(irSendCmd.__name__,":","sending code",cmd)
 
     try:
@@ -88,3 +94,16 @@ def irSendCmd(cmd):
 
     t.sleep(0.05)
     return 0
+
+
+def getSysDeviceNames():
+
+    dmesg = subP.Popen(["dmesg"],stdout=subP.PIPE,stderr=subP.STDOUT,text=True)
+
+
+    output = dmesg.communicate()[0]
+
+    rv = search(r"^.*(rc[0-1]).+?gpio-ir-tx", output)
+    tx = search(r"^.+?(rc[0-1]).+?gpio-ir_recv",output)
+
+    return
