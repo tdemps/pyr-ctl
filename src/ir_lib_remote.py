@@ -8,7 +8,6 @@ class irLibRemote:
 
         return
 
-
     def getScancode(self, keyName=""):
         
         if( not keyName or keyName not in self.codes ):

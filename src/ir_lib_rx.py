@@ -1,14 +1,9 @@
-from re import match
-from subprocess import DEVNULL
-import threading
-import subprocess as subP
-from time import sleep
-import re
-from tempfile import TemporaryFile
-from typing import Text
-from sys import stdout
-import pexpect
 import queue as q
+import threading
+from re import compile
+from time import sleep
+
+import pexpect
 
 irRxCmd = 'ir-keytable'
 irRxCmdArgsFormatStr = '-s {} -p nec -t'
@@ -17,7 +12,7 @@ irRxCmdArgsFormatStr = '-s {} -p nec -t'
 class irRxMonitorThread(threading.Thread):
 
     def __init__(self, threadID, name, rxProcess):
-        super(irRxMonitorThread,self).__init__()
+        super(irRxMonitorThread,self).__init__(daemon=True)
         self.threadID = threadID
         self.rxProcess = rxProcess
         self.name = name
@@ -37,7 +32,7 @@ class irRxMonitorThread(threading.Thread):
         # pre-compiled regex for speed + customization
         # the normal expect() uses the default re.compile flag (re.DOTALL)
         # which consumes everything includes newlines 
-        codeReExpr = re.compile(b"protocol\((.+?)\).+?(0[xX][0-9a-f]+)\r\n")
+        codeReExpr = compile(b"protocol\((.+?)\).+?(0[xX][0-9a-f]+)\r\n")
 
         where = 0
 

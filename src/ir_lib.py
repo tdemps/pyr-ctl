@@ -1,11 +1,10 @@
 #!/usr/bin/python3
 
 import subprocess as subP
-from sys import stdout
 import time as t
-from toml import load,TomlDecodeError
 from re import search
-import pexpect
+
+from toml import TomlDecodeError, load
 
 irRegisteredRemotes = {}
 
@@ -71,17 +70,17 @@ def irTxCmdCheck():
 
 def irSendCmd(cmd, dev=IR_TX_DEFAULT_DEVICE, protocol=IR_TX_DEFAULT_PROTOCOL):
 
-    print(irSendCmd.__name__,"entered")
+    # print(f"{irSendCmd.__name__}: entered")
 
-    if(not irCtlCmdStatus):
-        irTxCmdCheck()
+    if( not irCtlCmdStatus and not irTxCmdCheck() ):
+        print(irSendCmd.__name__,":","irTx not initialized properly!")
 
     if( cmd is None or cmd == ""):
         print(irSendCmd.__name__,":","invalid command")
         return -1
     
     cmdToRun = irSendCmdFormatStr.format(device=dev,protocol=protocol,code=cmd)
-    print(irSendCmd.__name__,":","sending code",cmd)
+    print(f"{irSendCmd.__name__}: sending code {cmd}")
 
     try:
         run = subP.run(cmdToRun.split(),capture_output=True)
@@ -95,6 +94,15 @@ def irSendCmd(cmd, dev=IR_TX_DEFAULT_DEVICE, protocol=IR_TX_DEFAULT_PROTOCOL):
     t.sleep(0.05)
     return 0
 
+def irSendCmdRepeated(cmd, dev=IR_TX_DEFAULT_DEVICE, protocol=IR_TX_DEFAULT_PROTOCOL,num=1,delay=1):
+
+    cursor = 0
+    while( cursor < num ):
+        irSendCmd(cmd,dev,protocol)
+        t.sleep(delay)
+        cursor += 1
+
+    return
 
 def getSysDeviceNames():
 

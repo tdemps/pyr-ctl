@@ -1,16 +1,20 @@
 #!/usr/bin/python3
 
-from tempfile import TemporaryFile
-from systemd import journal
 import datetime as dt
 import logging
-import re
-import ir_lib as irl
-import signal
-from json import loads
-from ir_lib_rx import irRxMonitorThread,initIRRx
-from spotify_lib import *
 import queue as q
+import signal
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from json import JSONDecodeError, loads
+from re import search
+from threading import Thread
+
+from systemd import journal
+
+import ir_lib as irl
+from ir_lib import irSendCmd, irSendCmdRepeated
+from ir_lib_rx import initIRRx, irRxMonitorThread
+from spotify_lib import *
 
 fluancePath = "/home/pi/ir-ctrl-proj/FLUANCE-AI60-REMOTE.toml"
 # name of Soptify service to watch for log entries
@@ -25,17 +29,16 @@ spLogger = None
 
 spState = None
 
-speaker = {
-    "POWER" : 0,
-    "VOLUME" : 0,
-    "MUTE" : 0,
-    "SOURCE" : 0
-}
+serverPort = 7070
+
+gHomeServer = None
 
 # sys device used for RX. might be rc1 sometimes
-irRxSysDevice = "rc2"
+irRxSysDevice = "rc0"
 
 irTxDevice = "/dev/lirc-tx"
+
+wordNumList = ["zero","one","two","three","four"]
 
 def loggerSetup():
     if( spLogger is not None ):
@@ -56,7 +59,7 @@ def parseSpMessage(msg):
     if( not msg ):
         return -1
 
-    msgTime = re.search(r"\[(.+?)\s{1}", msg)
+    msgTime = search(r"\[(.+?)\s{1}", msg)
 
     if( msgTime is None ):
         print(parseSpMessage.__name__,"Error processing journal entry!!")
@@ -66,7 +69,7 @@ def parseSpMessage(msg):
         msgTime = dt.datetime.strptime(msgTime,datetimeFormatStr)
 
     # checks if log entry is song info
-    song = re.search(r"<(.+?)>.+loaded", msg)
+    song = search(r"<(.+?)>.+loaded", msg)
 
     if( song is not None ):
         #new song queued
@@ -77,7 +80,7 @@ def parseSpMessage(msg):
         return RASPOTIFY_MSG_TYPE.NEW_SONG
     
     # event attributes are logged in json form (separate entries than songs)
-    event = re.search(r"({.*})",msg)
+    event = search(r"({.*})",msg)
     
     if( event is not None ):
         try:
@@ -140,10 +143,40 @@ def spConnect():
 
 def keyboardInterruptHandler(signal, frame):
     print("KeyboardInterrupt (ID: {}) has been caught. Cleaning up...".format(signal))
+    gHomeServer.server_close()
+    print("Server stopped.")
     exit(0)
+
+class gHomeRequestHandler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        self.data_string = self.rfile.read(int(self.headers['Content-Length']))
+        #holds dict loaded from json
+        jData = None
+        try:
+            jData = loads(self.data_string)
+            if( "command" not in jData ):
+                raise JSONDecodeError
+        except JSONDecodeError:
+            print("Couldn't decode request json")
+            return -1
+
+        for k,v in remote.items():
+            if( jData['command'] == k):
+                print("Matched button cmd received:",k)
+                if( k == "SOURCE" ):
+                    index = wordNumList.index(jData["source"]) if ( jData["source"] in wordNumList ) else 1
+                    irSendCmdRepeated(v,num=index)
+                else:
+                    irl.irSendCmd(v)
+                return 0
+        
+        print("Couldn't find matching button name")
+
+        return -1
 
 
 if __name__ == "__main__":
+
     # read in remote map file to generate remote object
     remote = irl.irReadRemoteFile(fluancePath)
     if(remote is None):
@@ -164,8 +197,12 @@ if __name__ == "__main__":
     
     rxProcess = initIRRx(irRxSysDevice)
     rxThread = irRxMonitorThread(1,"test",rxProcess)
-    rxThread.daemon = True
     rxThread.start()
+
+    gHomeServer = HTTPServer(("", serverPort), gHomeRequestHandler)
+    thread = Thread(target=gHomeServer.serve_forever,daemon=True)
+    thread.start()
+    print("Server started on port",serverPort)
 
     while True:
         # checks every X seconds
@@ -181,4 +218,3 @@ if __name__ == "__main__":
             rxThread.rxQ.task_done()
         except q.Empty:
             pass
-
