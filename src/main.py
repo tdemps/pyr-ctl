@@ -4,7 +4,6 @@ import datetime as dt
 import logging
 import queue as q
 import signal
-from http.server import BaseHTTPRequestHandler, HTTPServer
 from json import JSONDecodeError, loads
 from re import search
 from threading import Thread
@@ -12,9 +11,9 @@ from threading import Thread
 from systemd import journal
 
 import ir_lib as irl
-from ir_lib import irSendCmd, irSendCmdRepeated
 from ir_lib_rx import initIRRx, irRxMonitorThread
 from spotify_lib import *
+import gHomeServer as gh
 
 fluancePath = "/home/pi/ir-ctrl-proj/FLUANCE-AI60-REMOTE.toml"
 # name of Soptify service to watch for log entries
@@ -37,8 +36,6 @@ gHomeServer = None
 irRxSysDevice = "rc0"
 
 irTxDevice = "/dev/lirc-tx"
-
-wordNumList = ["zero","one","two","three","four"]
 
 def loggerSetup():
     if( spLogger is not None ):
@@ -147,34 +144,6 @@ def keyboardInterruptHandler(signal, frame):
     print("Server stopped.")
     exit(0)
 
-class gHomeRequestHandler(BaseHTTPRequestHandler):
-    def do_POST(self):
-        self.data_string = self.rfile.read(int(self.headers['Content-Length']))
-        #holds dict loaded from json
-        jData = None
-        try:
-            jData = loads(self.data_string)
-            if( "command" not in jData ):
-                raise JSONDecodeError
-        except JSONDecodeError:
-            print("Couldn't decode request json")
-            return -1
-
-        for k,v in remote.items():
-            if( jData['command'] == k):
-                print("Matched button cmd received:",k)
-                if( k == "SOURCE" ):
-                    index = wordNumList.index(jData["source"]) if ( jData["source"] in wordNumList ) else 1
-                    irSendCmdRepeated(v,num=index)
-                else:
-                    irl.irSendCmd(v)
-                return 0
-        
-        print("Couldn't find matching button name")
-
-        return -1
-
-
 if __name__ == "__main__":
 
     # read in remote map file to generate remote object
@@ -187,7 +156,6 @@ if __name__ == "__main__":
     spLogger = loggerSetup()
     spServiceJournal = journalReaderSetup(spServiceName)
     signal.signal(signal.SIGINT, keyboardInterruptHandler)  
-    
 
     # irl.irSendCmd(remote["POWER"])
     print("Setup complete.\n")
@@ -196,13 +164,14 @@ if __name__ == "__main__":
     irl.getSysDeviceNames()
     
     rxProcess = initIRRx(irRxSysDevice)
-    rxThread = irRxMonitorThread(1,"test",rxProcess)
+    rxThread = irRxMonitorThread(1,"threadID",rxProcess)
     rxThread.start()
 
-    gHomeServer = HTTPServer(("", serverPort), gHomeRequestHandler)
-    thread = Thread(target=gHomeServer.serve_forever,daemon=True)
-    thread.start()
-    print("Server started on port",serverPort)
+    gHomeServer = gh.gHomeServerInit(serverPort,remote)
+    if( gHomeServer is not None ):
+        thread = Thread(target=gHomeServer.serve_forever,daemon=True)
+        thread.start()
+        print("Server started on port",gHomeServer.server_port)
 
     while True:
         # checks every X seconds
