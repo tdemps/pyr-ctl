@@ -1,5 +1,8 @@
 from enum import Enum,auto
 import datetime as dt
+from re import search
+from json import loads
+from systemd import journal
 
 # Num minutes before running spotify shutdown routine
 spTimeout = 15
@@ -18,7 +21,10 @@ class RASPOTIFY_MSG_TYPE(Enum):
     VOLUME_SET = auto()
     PLAYER_EVENT = auto()
 
-
+# used to convert timestamps from log entries to datetime obj's
+datetimeFormatStr = "%Y-%m-%dT%H:%M:%SZ"
+# default service whose logs will be monitored
+SPOTIFY_DEFAULT_SERVER="raspotify"
 
 class spotifyState:
 
@@ -69,7 +75,7 @@ class spotifyState:
 
         return True
 
-
+    # convert event field in librespot json to our enum
     @staticmethod
     def librespotEventToEnum(e):
         if( e == "playing" ):
@@ -147,5 +153,75 @@ class spotifyState:
             self.__isActive = True
 
         return
+
+    @staticmethod
+    def spParseLogMessage(msg, spStateInst):
+
+        if( not msg or not spStateInst ):
+            return -1
+
+        msgTime = search(r"\[(.+?)\s{1}", msg)
+
+        if( msgTime is None ):
+            print(spotifyState.spParseLogMessage.__name__,"Error processing journal entry!!")
+            return -1
+        else:
+            msgTime = msgTime.group(1)
+            msgTime = dt.datetime.strptime(msgTime,datetimeFormatStr)
+
+        # checks if log entry is song info
+        song = search(r"<(.+?)>.+loaded", msg)
+
+        if( song is not None ):
+            #new song queued
+            song = song.group(1)
+            spStateInst.currentSong = song
+            spStateInst.lastActiveTime = msgTime
+            print("song",song,"played at",msgTime.strftime("%m/%d, %H:%M:%S"))
+            return RASPOTIFY_MSG_TYPE.NEW_SONG
+        
+        # event attributes are logged in json form (separate entries than songs)
+        event = search(r"({.*})",msg)
+        
+        if( event is not None ):
+            try:
+                # if log msg is an event (JSON), process it into dictionary
+                event = loads(event.group(1))
+                spStateInst.handleEvent(event,msgTime)
+                return RASPOTIFY_MSG_TYPE.PLAYER_EVENT
+            except Exception as e:
+                print(spotifyState.spParseLogMessage.__name__,": Error processing event json",e)
+                return -1
+
+        return -1
+
+    # I don't like that this needs an spState object to pass through to parseLogMessage
+    # Will hopefully rework later
+    @staticmethod
+    def journalReaderSetup(spState, serviceName=SPOTIFY_DEFAULT_SERVER):
+
+        print(spotifyState.journalReaderSetup.__name__,": Setting up journal reader for:",serviceName)
+        j = journal.Reader()
+        # only entries from this boot
+        j.this_boot()
+        j.log_level(journal.LOG_DEBUG)
+        # only entries from spotify service
+        j.add_match('_SYSTEMD_UNIT='+serviceName)
+        # move to end of log
+        j.seek_tail()
+        entry = j.get_previous()
+        # iterate through reversed journal to figure out current state of spotify
+        while( bool(entry) ):
+            mType = spotifyState.spParseLogMessage(entry["MESSAGE"],spState)
+            # if we find a song or player event entry, that's enough to determine state.
+            if( mType == RASPOTIFY_MSG_TYPE.NEW_SONG or mType == RASPOTIFY_MSG_TYPE.PLAYER_EVENT):
+                break
+            entry = j.get_previous()
+
+        # move to end of log
+        j.seek_tail()
+        j.get_next()
+
+        return j
     
 

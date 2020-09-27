@@ -18,19 +18,19 @@ import gHomeServer as gh
 fluancePath = "/home/pi/ir-ctrl-proj/FLUANCE-AI60-REMOTE.toml"
 # name of Soptify service to watch for log entries
 spServiceName = "raspotify.service"
-# used to convert timestamps from log entries to datetime obj's
-datetimeFormatStr = "%Y-%m-%dT%H:%M:%SZ"
 # reference to spotify service log obj
 spServiceJournal = None
 loggerName = "ir-ctrl-proj"
 # used to send programs output to journal log
 spLogger = None
-
+# holds spotifyState instance
 spState = None
-
+# port to host HTTP server on
 serverPort = 7070
-
+# HTTP server instance
 gHomeServer = None
+
+rxThread = None
 
 # sys device used for RX. might be rc1 sometimes
 irRxSysDevice = "rc0"
@@ -49,79 +49,6 @@ def loggerSetup():
     logger.setLevel(logging.INFO)
     return logger
 
-
-def parseSpMessage(msg):
-    global spState
-
-    if( not msg ):
-        return -1
-
-    msgTime = search(r"\[(.+?)\s{1}", msg)
-
-    if( msgTime is None ):
-        print(parseSpMessage.__name__,"Error processing journal entry!!")
-        return -1
-    else:
-        msgTime = msgTime.group(1)
-        msgTime = dt.datetime.strptime(msgTime,datetimeFormatStr)
-
-    # checks if log entry is song info
-    song = search(r"<(.+?)>.+loaded", msg)
-
-    if( song is not None ):
-        #new song queued
-        song = song.group(1)
-        spState.currentSong = song
-        spState.lastActiveTime = msgTime
-        print("song",song,"played at",msgTime.strftime("%m/%d, %H:%M:%S"))
-        return RASPOTIFY_MSG_TYPE.NEW_SONG
-    
-    # event attributes are logged in json form (separate entries than songs)
-    event = search(r"({.*})",msg)
-    
-    if( event is not None ):
-        try:
-            # if log msg is an event (JSON), process it into dictionary
-            event = loads(event.group(1))
-            spState.handleEvent(event,msgTime)
-            return RASPOTIFY_MSG_TYPE.PLAYER_EVENT
-        except Exception as e:
-            print(parseSpMessage.__init__,": Error processing event json",e)
-            return -1
-
-    return -1
-
-
-def journalReaderSetup(serviceName=""):
-
-    if( spServiceJournal is not None ):
-        print(journalReaderSetup.__name__,": journal reader already setup!")
-        return
-
-    print(journalReaderSetup.__name__,": Setting up journal reader for:",serviceName)
-    j = journal.Reader()
-    #only entries from this boot
-    j.this_boot()
-    j.log_level(journal.LOG_DEBUG)
-    #only entries from spotify service
-    j.add_match('_SYSTEMD_UNIT='+serviceName)
-    #move to end of log
-    j.seek_tail()
-    entry = j.get_previous()
-    #iterate through reversed journal to figure out current state of spotify
-    while( bool(entry) ):
-        mType = parseSpMessage(entry["MESSAGE"])
-        #if we find a song or player event entry, that's enough to determine state.
-        if( mType == RASPOTIFY_MSG_TYPE.NEW_SONG or mType == RASPOTIFY_MSG_TYPE.PLAYER_EVENT):
-            break
-        entry = j.get_previous()
-
-    #move to end of log
-    j.seek_tail()
-    j.get_next()
-
-    return j
-
 def spDisconnect():
 
     print("User has disconnected from Spotify")
@@ -139,9 +66,13 @@ def spConnect():
     return
 
 def keyboardInterruptHandler(signal, frame):
-    print("KeyboardInterrupt (ID: {}) has been caught. Cleaning up...".format(signal))
-    gHomeServer.server_close()
-    print("Server stopped.")
+    print(f"KeyboardInterrupt (ID: {signal}) has been caught. Cleaning up...")
+    
+    if( gHomeServer is not None ):
+        gHomeServer.server_close()
+        print("Server stopped.")
+
+    rxThread.join()
     exit(0)
 
 if __name__ == "__main__":
@@ -154,7 +85,8 @@ if __name__ == "__main__":
     # create new spotify state object with callbacks for connects/disconnects
     spState = spotifyState(onDisconnect=spDisconnect,onConnect=spConnect)
     spLogger = loggerSetup()
-    spServiceJournal = journalReaderSetup(spServiceName)
+    spServiceJournal = spotifyState.journalReaderSetup(spState,spServiceName)
+    # sets up handler for CTRL+C signal so we can clean up nicely
     signal.signal(signal.SIGINT, keyboardInterruptHandler)  
 
     # irl.irSendCmd(remote["POWER"])
@@ -162,23 +94,26 @@ if __name__ == "__main__":
 
     # PLACEHOLDER
     irl.getSysDeviceNames()
-    
+    # init ir-keytable subprocess for RX
     rxProcess = initIRRx(irRxSysDevice)
+    # init thread for RXing codes, passing in the spawned subprocess
     rxThread = irRxMonitorThread(1,"threadID",rxProcess)
     rxThread.start()
-
+    # setup server to receive HTTP requests from IFTTT routines
     gHomeServer = gh.gHomeServerInit(serverPort,remote)
+
     if( gHomeServer is not None ):
+        # serve requests on separate thread
         thread = Thread(target=gHomeServer.serve_forever,daemon=True)
         thread.start()
         print("Server started on port",gHomeServer.server_port)
 
     while True:
-        # checks every X seconds
+        # checks for new log messages every X seconds
         event = spServiceJournal.wait(1)
-
+        # if there are new log entires, parse them looking for relevent events
         for e in spServiceJournal:
-            parseSpMessage(e["MESSAGE"])
+            spotifyState.spParseLogMessage(e["MESSAGE"], spState)
 
         try:
             # check for new items in rx queue
