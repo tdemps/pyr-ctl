@@ -4,6 +4,7 @@ After=network.target
 After=raspotify.service
 StartLimitIntervel=250
 StartLimitBurst=20
+Requires=setrxprotocols.service
 
 [Service]
 Type=simple

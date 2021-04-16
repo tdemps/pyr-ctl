@@ -1,0 +1,11 @@
+[Unit]
+Description=Change IR RX protocols to be compatible with remote
+Before=speakerctl.service
+
+[Service]
+Type=oneshot
+ExecStart=echo nec > /sys/devices/platform/ir-receiver@17/rc/rc*/protocols
+User=root
+
+[Install]
+WantedBy=multi-user.target
