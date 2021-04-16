@@ -4,8 +4,6 @@ import datetime as dt
 import logging
 import queue as q
 import signal
-from json import JSONDecodeError, loads
-from re import search
 from threading import Thread
 
 from systemd import journal
@@ -17,7 +15,7 @@ import gHomeServer as gh
 
 fluancePath = "/home/pi/ir-ctrl-proj/FLUANCE-AI60-REMOTE.toml"
 # name of Soptify service to watch for log entries
-spServiceName = "raspotify.service"
+SP_SERVICE_NAME = "raspotify.service"
 # reference to spotify service log obj
 spServiceJournal = None
 loggerName = "ir-ctrl-proj"
@@ -26,15 +24,13 @@ spLogger = None
 # holds spotifyState instance
 spState = None
 # port to host HTTP server on
-serverPort = 7070
+GHOME_SERVER_PORT = 7070
 # HTTP server instance
 gHomeServer = None
 
-rxThread = None
+irRxThread = None
 
-# sys device used for RX. might be rc1 sometimes
-irRxSysDevice = "rc0"
-
+remote = None
 irTxDevice = "/dev/lirc-tx"
 
 def loggerSetup():
@@ -60,7 +56,6 @@ def spDisconnect():
 def spConnect():
 
     print("User has started active spotify session")
-    # spIsActive = True
     irl.irSendCmd(remote["POWER"])
 
     return
@@ -72,8 +67,42 @@ def keyboardInterruptHandler(signal, frame):
         gHomeServer.server_close()
         print("Server stopped.")
 
-    rxThread.join()
+    irRxThread.join()
     exit(0)
+
+# callback for google home server
+# param is json form of POST data
+def gHomeCallback(jsonData):
+
+    # my current ifttt recipe uses custom word not number, so convert that
+    wordNumList = ["zero", "one", "two", "three", "four"]
+
+    if( not jsonData):
+        return
+
+    print( gHomeCallback.__name__, "request reveived")
+
+    for k, v in remote.items():
+        if(jsonData['command'] == k):
+            print("Matched button cmd received:", k)
+
+            if(k == "SOURCE"):
+                # would like to add a source change handler in the ir remote class later
+                index = wordNumList.index(jsonData["source"]) if (
+                    jsonData["source"] in wordNumList) else 1
+                irl.irSendCmdRepeated(v, num=index)
+            if(k == "SPOTIFY_STATE_CHANGE"):
+                if("new_state" not in jsonData):
+                    print("SPOTIFY_STATE_CHANGE cmd missing/incorrect \"new_state\" key,val")
+                else:
+                    pass
+            else:
+                irl.irSendCmd(v)
+            return 0
+
+    print("Couldn't find matching command for", jsonData["command"])
+
+    return -1
 
 if __name__ == "__main__":
 
@@ -85,22 +114,19 @@ if __name__ == "__main__":
     # create new spotify state object with callbacks for connects/disconnects
     spState = spotifyState(onDisconnect=spDisconnect,onConnect=spConnect)
     spLogger = loggerSetup()
-    spServiceJournal = spotifyState.journalReaderSetup(spState,spServiceName)
+    spServiceJournal = spotifyState.journalReaderSetup(spState,SP_SERVICE_NAME)
     # sets up handler for CTRL+C signal so we can clean up nicely
     signal.signal(signal.SIGINT, keyboardInterruptHandler)  
-
     # irl.irSendCmd(remote["POWER"])
-    print("Setup complete.\n")
-
     # PLACEHOLDER
-    irl.getSysDeviceNames()
+    # irl.getSysDeviceNames()
     # init ir-keytable subprocess for RX
-    rxProcess = initIRRx(irRxSysDevice)
+    rxProcess = initIRRx()
     # init thread for RXing codes, passing in the spawned subprocess
-    rxThread = irRxMonitorThread(1,"threadID",rxProcess)
-    rxThread.start()
+    irRxThread = irRxMonitorThread(1,"threadID",rxProcess)
+    irRxThread.start()
     # setup server to receive HTTP requests from IFTTT routines
-    gHomeServer = gh.gHomeServerInit(serverPort,remote)
+    gHomeServer = gh.gHomeServerInit(gHomeCallback,GHOME_SERVER_PORT)
 
     if( gHomeServer is not None ):
         # serve requests on separate thread
@@ -108,17 +134,27 @@ if __name__ == "__main__":
         thread.start()
         print("Server started on port",gHomeServer.server_port)
 
+    print("Setup complete.\n")
     while True:
         # checks for new log messages every X seconds
-        event = spServiceJournal.wait(1)
+        event = spServiceJournal.wait(0.5)
         # if there are new log entires, parse them looking for relevent events
         for e in spServiceJournal:
             spotifyState.spParseLogMessage(e["MESSAGE"], spState)
 
         try:
             # check for new items in rx queue
-            irRxProtocol,irRxCode = rxThread.rxQ.get(block = False)
+            irRxProtocol,irRxCode = irRxThread.rxQ.get(block = False)
+            # maps buttons from tv remote to speaker volume
+            if( irRxProtocol == "nec" and irRxCode == "0x412" ):
+                irl.irSendCmd(remote["VOLUME_UP"])
+            elif( irRxProtocol == "nec" and irRxCode == "0x415" ):
+                irl.irSendCmd(remote["VOLUME_DOWN"])
+            elif(irRxProtocol == "nec" and irRxCode == "0x411"):
+                irl.irSendCmd(remote["POWER"])
+            elif(irRxProtocol == "nec" and irRxCode == "0x414"):
+                irl.irSendCmd(remote["SOURCE"])
             print("Received new irCode from rxThread")
-            rxThread.rxQ.task_done()
+            irRxThread.rxQ.task_done()
         except q.Empty:
             pass
