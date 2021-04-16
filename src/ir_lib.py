@@ -1,23 +1,32 @@
-#!/usr/bin/python3
-
 import subprocess as subP
 import time as t
 from re import search
 
 from toml import TomlDecodeError, load
 
-irRegisteredRemotes = {}
-
+# default device used to transmit codes
 IR_TX_DEFAULT_DEVICE = "/dev/lirc-tx"
+# default protocol used when sending codes
 IR_TX_DEFAULT_PROTOCOL = "necx"
-
-irSendCmdFormatStr = "ir-ctl -d {device} --scancode={protocol}:{code}"
+# tool used to transmit IR codes
+IR_TX_CMD = "ir-ctl"
+# used to generate arguments to IR TX code
+irSendCmdFormatStr = "{tx_cmd} -d {device} --scancode={protocol}:{code}"
+# True if IR_TX_CMD is installed on system
 irCtlCmdStatus = False
 
-''' Reads remote codes from file
-  ' @returns new remote object
-'''
+irRegisteredRemotes = {}
+
+
 def irReadRemoteFile(filePath):
+    """Reads remote codes from file
+
+    Args:
+        filePath (string): Path to valid .toml file desribing remote buttons and codes
+
+    Returns:
+        Dictionary: Button names as keys, codes (strings) as values
+    """
     name = None
     protocols = None
     attributes = None
@@ -53,33 +62,46 @@ def irReadRemoteFile(filePath):
     return codes
 
 
-def irTxCmdCheck():
+def _irTxCmdCheck():
+    """Checks if cmd used to transmit ir codes is installed on system
+
+    Returns:
+        bool: True if IR_TX_CMD is installed, false otherwise
+    """
     global irCtlCmdStatus
 
     try:
-        subP.run(["ir-ctl"],check=True,shell=True,capture_output=True)
+        subP.run([IR_TX_CMD], check=True, shell=True, capture_output=True)
     except subP.CalledProcessError as e:
         if(e.returncode != 64):
             print(e.stderr.decode(),"Exit code:",e.args[0])
-            print("ir-ctl not found, please install ir-keytable\n")
+            print(IR_TX_CMD,"not found, please install ir-keytable\n")
             exit(1)
     
-    print(irTxCmdCheck.__name__,"ir-ctl is installed, nice!")
+    print(_irTxCmdCheck.__name__,":",IR_TX_CMD,"is installed, nice!")
     irCtlCmdStatus = True
     return True
 
+# used to transit given command
 def irSendCmd(cmd, dev=IR_TX_DEFAULT_DEVICE, protocol=IR_TX_DEFAULT_PROTOCOL):
+    """Used to trnsmit given command
 
-    # print(f"{irSendCmd.__name__}: entered")
+    Args:
+        cmd (String): IR code to send
+        dev (String, optional): Path to device used to send code. Defaults to IR_TX_DEFAULT_DEVICE.
+        protocol (String, optional): IR protocol used to send cmd. Defaults to IR_TX_DEFAULT_PROTOCOL.
 
-    if( not irCtlCmdStatus and not irTxCmdCheck() ):
+    Returns:
+        int: True if command sent successully, negative on error.
+    """
+    if( not irCtlCmdStatus and not _irTxCmdCheck() ):
         print(irSendCmd.__name__,":","irTx not initialized properly!")
 
     if( cmd is None or cmd == ""):
         print(irSendCmd.__name__,":","invalid command")
         return -1
     
-    cmdToRun = irSendCmdFormatStr.format(device=dev,protocol=protocol,code=cmd)
+    cmdToRun = irSendCmdFormatStr.format(tx_cmd=IR_TX_CMD,device=dev,protocol=protocol,code=cmd)
     print(f"{irSendCmd.__name__}: sending code {cmd}")
 
     try:

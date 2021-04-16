@@ -5,7 +5,11 @@ from time import sleep
 
 import pexpect
 
-irRxCmd = 'ir-keytable'
+# tool used to receive IR codes
+IR_RX_CMD = 'ir-keytable'
+# sys devices used for RX. not always constant
+irRxSysDevices = ["rc0", "rc1"]
+# string containing arguments for ir rx subprocess (device to be filled in later)
 irRxCmdArgsFormatStr = '-s {} -p nec -t'
 
 
@@ -50,7 +54,7 @@ class irRxMonitorThread(threading.Thread):
                 if( irCode and irProtocol ): #and ( not self.rxQ or irCode != self.rxQ[-1][1] ) )
                     print(irRxMonitorThread.__name__,':New code:',irCode.decode(),"Protocol:",irProtocol.decode())
                     # add tuple to queue
-                    self.rxQ.put( ( irProtocol,irCode ) )
+                    self.rxQ.put( ( irProtocol.decode(),irCode.decode() ) )
 
         return
 
@@ -61,16 +65,23 @@ class irRxMonitorThread(threading.Thread):
         return super(irRxMonitorThread,self).join()
 
 
-def initIRRx(device,stdoutLocation=None):
-    cmdArgs = irRxCmdArgsFormatStr.format(device).split()
+def initIRRx(stdoutLocation=None):
 
-    irRx = pexpect.spawn(irRxCmd,cmdArgs) #encoding='utf-8'
-    sleep(0.1)
-    # Clears any initialization output from irRx subprocess stdout
-    # for l in irRx.stdout:
-    #     if(irRx.poll() is not None):
-    #         break
-    #     print(irRxMonitorThread.__name__,":",l)
+    irRx = None
+
+    for dev in irRxSysDevices:
+        cmdArgs = irRxCmdArgsFormatStr.format(dev).split()
+        irRx = pexpect.spawn(IR_RX_CMD,cmdArgs) #encoding='utf-8'
+        # if sys device isn't the receiver, irRX process will exit prematurely
+        sleep(1)
+
+        if( not irRx.isalive() ):
+            irRx.close()
+            print( initIRRx.__name__, "Error initializing irRX process with device:",dev )
+        else:
+            print( initIRRx.__name__, "Using sys device",dev,"for ir RX.")
+            break
+
 
     # Check if irRx process terminated on open bc of an error
     err = irRx.isalive()
